@@ -1,0 +1,15 @@
+mhalib/csrc/hip/
+mhalib/hip/
+mhalib/mhalib.egg-info/
+__pycache__/
+bert.log
+layers/__pycache__/
+mhalib.cpython-36m-x86_64-linux-gnu.so
+mhalib/results/
+results/
+*.swp
+rocblas*.csv
+../../../../results/dgx2h_ngc20.06_pytorch/bert/.result_0.txt.swp
+cleanup_scripts/hdf5/
+mlperf_tfrecords/
+rocprof_out.csv
