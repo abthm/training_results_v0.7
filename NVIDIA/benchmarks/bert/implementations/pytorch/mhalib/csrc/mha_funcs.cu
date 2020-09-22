@@ -5,7 +5,11 @@
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
-#include <cuda_fp16.h>
+//#include <cuda_fp16.h>
+//below lines to avoid editing hip source file
+//#define __HIP_NO_HALF_OPERATORS__  
+//#define __HIP_NO_HALF_CONVERSIONS__ 
+#include "../../hip_fp16.h"
 //#include <cuda_profiler_api.h>
 #include "THC/THC.h"
 #include <ATen/cuda/CUDAContext.h>

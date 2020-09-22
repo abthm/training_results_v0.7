@@ -80,6 +80,9 @@ class FastUnpadBertSelfAttention(nn.Module):
         if self.fuse_qkv:
             weight = torch.cat([self.query.weight.view(self.num_attention_heads,self.attention_head_size,1,self.hidden_size), self.key.weight.view(self.num_attention_heads,self.attention_head_size,1,self.hidden_size), self.value.weight.view(self.num_attention_heads,self.attention_head_size,1,self.hidden_size)], dim=1).reshape(self.all_head_size*3,self.hidden_size).contiguous()
             bias = torch.cat([self.query.bias.view(self.num_attention_heads,1,self.attention_head_size), self.key.bias.view(self.num_attention_heads,1,self.attention_head_size), self.value.bias.view(self.num_attention_heads,1,self.attention_head_size)],dim=1).reshape(3*self.hidden_size).contiguous()
+            print("------weight type--------",weight.type())
+            print("---------bias type-----------",bias.type())
+            print("--------hidden_states type",hidden_states.type())
             mixed_x_layer = torch.addmm(bias, hidden_states, weight.t())
         else:
             query_layer = self.query(hidden_states)

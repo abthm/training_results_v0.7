@@ -4,7 +4,8 @@
 #include <cfloat>
 #include <limits>
 #include <stdint.h>
-#include <cuda_fp16.h>
+//#include <cuda_fp16.h>
+#include "../../hip_fp16.h"
 #include <cmath>
 
 namespace {
