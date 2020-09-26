@@ -497,6 +497,7 @@ class BertLayer(nn.Module):
             print("-------------using mhalib------------")
             self.attention = FastUnpadBertAttention(config)
         else:
+            print("-----------using old code path---------")
             self.attention = BertAttention(config)
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)

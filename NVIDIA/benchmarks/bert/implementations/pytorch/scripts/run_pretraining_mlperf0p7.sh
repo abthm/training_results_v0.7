@@ -16,7 +16,7 @@
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 train_batch_size=${1:-8192}
 learning_rate=${2:-"6e-3"}
-precision=${3:-"fp16"}
+precision=${3:-"fp32"}
 num_gpus=${4:-8}
 warmup_proportion=${5:-"0.0"}
 train_steps=${6:-7038}
@@ -27,9 +27,9 @@ accumulate_gradients=${10:-"true"}
 gradient_accumulation_steps=${11:-128}
 seed=${12:-$RANDOM}
 job_name=${13:-"bert_lamb_pretraining"}
-allreduce_post_accumulation=${14:-"true"}
-allreduce_post_accumulation_fp16=${15:-"true"}
-train_batch_size_phase2=${17:-27}
+allreduce_post_accumulation=${14:-"false"}
+allreduce_post_accumulation_fp16=${15:-"false"}
+train_batch_size_phase2=${17:-4}
 learning_rate_phase2=${18:-"3.5e-4"}
 warmup_proportion_phase2=${19:-"0"}
 train_steps_phase2=${20:-13700}
@@ -203,7 +203,7 @@ CMD+=" --weight_decay_rate=${WEIGHT_DECAY_RATE:-0.01}"
 CMD+=" --do_train --phase2"
 CMD+=" --train_mlm_accuracy_window_size=0"
 CMD+=" --target_mlm_accuracy=0.712"
-CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha --skip_checkpoint" ##remove unpad to try apex contrib mha, fp16 removed
+CMD+=" --fused_gelu_bias --dense_seq_output --skip_checkpoint" ##remove unpad to try apex contrib mha, fp16 removed, remved fused_mha, unpad for f32 old code path
 CMD+=" --init_checkpoint=$init_checkpoint"
 CMD+=" --enable_fuse_dropout"
 #CMD+=" --nvprof"

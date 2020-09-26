@@ -622,7 +622,8 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         optimizer.step()
         for param in model.parameters():
             param.grad = None
-        global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1
+        #global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1
+        global_step += 1  ##Fix for F32 taken from NVDLE, above line erros out
 
     return global_step
 
@@ -816,6 +817,8 @@ def main():
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init_fn=worker_init)
                 #avg_seqs_per_sec = []
+                average_loss_list = []
+                mlm_acc_list = []
                 for step, batch in enumerate(train_dataloader):
                     #torch.cuda.synchronize() ##added to prevent mem access fault in mGPU run, dint help
                     #if training_steps == 1: ### to run 1 training_step to get rocblas calls
@@ -828,7 +831,7 @@ def main():
                     loss, mlm_acc, _ = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
                                     masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
                                     checkpoint_activations=args.checkpoint_activations)
-
+                    mlm_acc_list.append(mlm_acc) #ADDED
                     divisor = args.gradient_accumulation_steps
                     if args.gradient_accumulation_steps > 1:
                         if not args.allreduce_post_accumulation:
@@ -903,6 +906,7 @@ def main():
                             else:
                                 print({"training_steps": training_steps,
                                       "average_loss": average_loss / (args.log_freq * divisor),
+                                      "mlm_accuracy": mlm_acc,
                                       "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
                                       "learning_rate": optimizer.param_groups[0]['lr'],
                                       "seq/s": training_perf,
@@ -910,7 +914,7 @@ def main():
                                       "samples_trained": samples_trained,
                                       "skipped_steps": now_skipped,
                                       "timestamp": now_time})
-
+                        average_loss_list.append(average_loss)
                         average_loss = 0
 
                     if global_step >= args.max_steps or end_training:
@@ -984,6 +988,20 @@ def main():
                                 sync=False)
         mlperf_logger.log_end(key=mlperf_logger.constants.RUN_STOP,
                               metadata={'status': status}, sync=False)
+
+        print("----len of loss-------",len(average_loss_list))
+        from matplotlib import pyplot as plt
+        plt.plot(average_loss_list,'r',label='loss')
+        plt.plot(mlm_acc_list,'g',label='mlm_acc')
+        plt.xticks(np.arange(0, len(average_loss_list), 1000))
+        plt.xlabel('steps')
+        #plt.ylabel('loss')
+        plt.legend()
+        plt.savefig('mi100-f32-oldcodepath-subcode-subhps.png')
+
+        ##SAVE AS numpy in case plot fails
+        np.save('mi100-f32-oldcodepath-subcode-subhps-loss',average_loss_list)
+        np.save('mi100-f32-oldcodepath-subcode-subhps-mlm-acc',mlm_acc_list)
 
     return args, final_loss, train_time_raw
 
