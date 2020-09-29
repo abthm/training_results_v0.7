@@ -1,15 +1,17 @@
 #include <vector>
 #include <iostream>
+//#ifdef __gfx908__  
+//Uncomment ifdef and endif only if you need to undef the HIP_HALF ops below just for gfx908 and not for others
+//below lines enable hip float to half conversion which are disabled by default in hip_fp16.h
+#undef __HIP_NO_HALF_OPERATORS__   
+#undef __HIP_NO_HALF_CONVERSIONS__
+//#endif
 
 #include <ATen/ATen.h>
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
-//#include <cuda_fp16.h>
-//below lines to avoid editing hip source file
-//#define __HIP_NO_HALF_OPERATORS__  
-//#define __HIP_NO_HALF_CONVERSIONS__ 
-#include "../../hip_fp16.h"
+#include <cuda_fp16.h>
 //#include <cuda_profiler_api.h>
 #include "THC/THC.h"
 #include <ATen/cuda/CUDAContext.h>

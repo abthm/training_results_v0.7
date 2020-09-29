@@ -60,7 +60,7 @@ elif is_rocm_pytorch:
 		    sources=['./csrc/hip/mha_funcs.hip'],
 		    extra_compile_args={
 				       'cxx': ['-O3',] + version_dependent_macros,
-					'nvcc':['-O3'], 
+                                       'nvcc':['-O3']
 				       }
 		    )
 	    )
