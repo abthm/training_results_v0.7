@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export NCCL_MIN_NCHANNELS=4
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 train_batch_size=${1:-8192}
 learning_rate=${2:-"6e-3"}
@@ -203,7 +204,7 @@ CMD+=" --weight_decay_rate=${WEIGHT_DECAY_RATE:-0.01}"
 CMD+=" --do_train --phase2"
 CMD+=" --train_mlm_accuracy_window_size=0"
 CMD+=" --target_mlm_accuracy=0.712"
-CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha --skip_checkpoint" ##remove unpad to try apex contrib mha, fp16 removed
+CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha" ##remove unpad to try apex contrib mha, fp16 removed, remove skip_checkpoint
 CMD+=" --init_checkpoint=$init_checkpoint"
 CMD+=" --enable_fuse_dropout"
 #CMD+=" --nvprof"

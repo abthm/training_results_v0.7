@@ -3,6 +3,8 @@ mhalib/hip/
 mhalib/mhalib.egg-info/
 __pycache__/
 bert.log
+*.npy
+*.png
 layers/__pycache__/
 mhalib.cpython-36m-x86_64-linux-gnu.so
 mhalib/results/
