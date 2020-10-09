@@ -35,7 +35,7 @@ namespace {
 // WARP_ITERATOINS The number of iterations required for one warp to iterate over all data.
 // WARP_SIZE number of elements working on a single batch, has to be a power of two.
 // ELEMENTS_PER_LDG_STG has to be 1.
-template <typename input_t, typename output_t, typename acc_t, int WARP_BATCH, int WARP_ITERATIONS, int WARP_SIZE = 64, int ELEMENTS_PER_LDG_STG=1>
+template <typename input_t, typename output_t, typename acc_t, int WARP_BATCH, int WARP_ITERATIONS, int WARP_SIZE = 32, int ELEMENTS_PER_LDG_STG=1>
 __global__ void softmax_warp_forward(input_t *dst, const output_t *src, int batch_size, int stride, int element_count)
 {
     assert(ELEMENTS_PER_LDG_STG==1);

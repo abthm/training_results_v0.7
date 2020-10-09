@@ -3,8 +3,8 @@
 //#ifdef __gfx908__  
 //Uncomment ifdef and endif only if you need to undef the HIP_HALF ops below just for gfx908 and not for others
 //below lines enable hip float to half conversion which are disabled by default in hip_fp16.h
-#undef __HIP_NO_HALF_OPERATORS__   
-#undef __HIP_NO_HALF_CONVERSIONS__
+//#undef __HIP_NO_HALF_OPERATORS__   
+//#undef __HIP_NO_HALF_CONVERSIONS__
 //#endif
 
 #include <ATen/ATen.h>
@@ -64,34 +64,11 @@ void FastBmm1Fprop_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()) + (strided ? embed : 0)); 	// key
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr())); 				// query
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr())); 	        		// output
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
+    //void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams]: at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_T,
-//                                   CUBLAS_OP_N,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   embed,
-//                                   static_cast<const void*>(scale ? &alpha : &one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   enable_stream ? heads : batch*heads,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_T,
                                    CUBLAS_OP_N,
                                    seqlen[i],
@@ -99,31 +76,54 @@ void FastBmm1Fprop_(torch::Tensor &A,
                                    embed,
                                    static_cast<const void*>(scale ? &alpha : &one),
                                    ptrA,
-                                   a_type, 
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    ptrB,
-                                   b_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    seqlen[i],
                                    seqlen[i]*seqlen[i],
-				   ptrD,
-				   d_type,
-				   seqlen[i],
-				   seqlen[i]*seqlen[i],
                                    enable_stream ? heads : batch*heads,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_T,
+//                                   CUBLAS_OP_N,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//                                   embed,
+//                                   static_cast<const void*>(scale ? &alpha : &one),
+//                                   ptrA,
+//                                   a_type, 
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   ptrB,
+//                                   b_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   seqlen[i],
+//                                   seqlen[i]*seqlen[i],
+//				   ptrD,
+//				   d_type,
+//				   seqlen[i],
+//				   seqlen[i]*seqlen[i],
+//                                   enable_stream ? heads : batch*heads,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
 	ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 	ptrB = static_cast<void*>(static_cast<half*>(ptrB) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 	ptrC = static_cast<void*>(static_cast<half*>(ptrC) + heads*seqlen[i]*seqlen[i]);
-	ptrD = static_cast<void*>(static_cast<half*>(ptrD) + heads*seqlen[i]*seqlen[i]); // is this correct, also using same values for ldd and stride_d as ldc and stride_c
+//	ptrD = static_cast<void*>(static_cast<half*>(ptrD) + heads*seqlen[i]*seqlen[i]); // is this correct, also using same values for ldd and stride_d as ldc and stride_c
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
         if(sync) cudaStreamSynchronize(stream[i]);
@@ -153,66 +153,66 @@ void FastBmm2Fprop_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()) + (strided ? 2*embed : 0));  // value 
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr()));            		// query*key
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr()));           		 // output
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
+    //void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams]: at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_N,
-//                                   CUBLAS_OP_N,
-//                                   embed,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   static_cast<const void*>(&one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   enable_stream ? heads*embed : batch*heads*embed,
-//                                   embed,
-//                                   enable_stream ? heads : batch*heads,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_N,
                                    CUBLAS_OP_N,
                                    embed,
                                    seqlen[i],
                                    seqlen[i],
-				   static_cast<const void*>(&one),
+                                   static_cast<const void*>(&one),
                                    ptrA,
-                                   a_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    ptrB,
-                                   b_type,
-				   seqlen[i],
-				   seqlen[i]*seqlen[i],
+                                   CUDA_R_16F,
+                                   seqlen[i],
+                                   seqlen[i]*seqlen[i],
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    enable_stream ? heads*embed : batch*heads*embed,
-				   embed,
-				   ptrD,
-				   d_type,
-				   enable_stream ? heads*embed : batch*heads*embed,
-				   embed,
+                                   embed,
                                    enable_stream ? heads : batch*heads,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_N,
+//                                   CUBLAS_OP_N,
+//                                   embed,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//				   static_cast<const void*>(&one),
+//                                   ptrA,
+//                                   a_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   ptrB,
+//                                   b_type,
+//				   seqlen[i],
+//				   seqlen[i]*seqlen[i],
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   enable_stream ? heads*embed : batch*heads*embed,
+//				   embed,
+//				   ptrD,
+//				   d_type,
+//				   enable_stream ? heads*embed : batch*heads*embed,
+//				   embed,
+//                                   enable_stream ? heads : batch*heads,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + heads*seqlen[i]*seqlen[i]);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + seqlen[i]*heads*embed);
-        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + seqlen[i]*heads*embed);
+//        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + seqlen[i]*heads*embed);
 
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
@@ -243,34 +243,11 @@ void FastBmm1Dgrad1_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()));           		// query
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr()));
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr()) + (strided ? embed : 0)); 	// grad_key
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? embed : 0)); 	// grad_key
+    //void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? embed : 0)); 	// grad_key
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams] : at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_N,
-//                                   CUBLAS_OP_T,
-//                                   embed,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   static_cast<const void*>(scale ? &alpha : &one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   enable_stream ? heads : heads*batch,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_N,
                                    CUBLAS_OP_T,
                                    embed,
@@ -278,31 +255,54 @@ void FastBmm1Dgrad1_(torch::Tensor &A,
                                    seqlen[i],
                                    static_cast<const void*>(scale ? &alpha : &one),
                                    ptrA,
-                                   a_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    ptrB,
-                                   b_type,
+                                   CUDA_R_16F,
                                    seqlen[i],
                                    seqlen[i]*seqlen[i],
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
-				   ptrD,
-				   d_type,
-				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-				   strided ? 3*embed : embed,
                                    enable_stream ? heads : heads*batch,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_N,
+//                                   CUBLAS_OP_T,
+//                                   embed,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//                                   static_cast<const void*>(scale ? &alpha : &one),
+//                                   ptrA,
+//                                   a_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   ptrB,
+//                                   b_type,
+//                                   seqlen[i],
+//                                   seqlen[i]*seqlen[i],
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//				   ptrD,
+//				   d_type,
+//				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//				   strided ? 3*embed : embed,
+//                                   enable_stream ? heads : heads*batch,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + heads*seqlen[i]*seqlen[i]);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
-        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
+//        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
@@ -333,34 +333,11 @@ void FastBmm2Dgrad1_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()) + (strided ? 2*embed : 0));  // value
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr()));
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr()));
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));
+//  void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams] : at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_T,
-//                                   CUBLAS_OP_N,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   embed,
-//                                   static_cast<const void*>(&one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//				   enable_stream ? heads*embed : batch*heads*embed,
-//                                   embed,
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   enable_stream ? heads : batch*heads,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_T,
                                    CUBLAS_OP_N,
                                    seqlen[i],
@@ -368,31 +345,54 @@ void FastBmm2Dgrad1_(torch::Tensor &A,
                                    embed,
                                    static_cast<const void*>(&one),
                                    ptrA,
-                                   a_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    ptrB,
-                                   b_type,
+                                   CUDA_R_16F,
 				   enable_stream ? heads*embed : batch*heads*embed,
                                    embed,
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    seqlen[i],
                                    seqlen[i]*seqlen[i],
-				   ptrD,
-				   d_type,
-				   seqlen[i],
-				   seqlen[i]*seqlen[i],
                                    enable_stream ? heads : batch*heads,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_T,
+//                                   CUBLAS_OP_N,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//                                   embed,
+//                                   static_cast<const void*>(&one),
+//                                   ptrA,
+//                                   a_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   ptrB,
+//                                   b_type,
+//				   enable_stream ? heads*embed : batch*heads*embed,
+//                                   embed,
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   seqlen[i],
+//                                   seqlen[i]*seqlen[i],
+//				   ptrD,
+//				   d_type,
+//				   seqlen[i],
+//				   seqlen[i]*seqlen[i],
+//                                   enable_stream ? heads : batch*heads,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + seqlen[i]*heads*embed);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + heads*seqlen[i]*seqlen[i]);
-        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + heads*seqlen[i]*seqlen[i]);
+//        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + heads*seqlen[i]*seqlen[i]);
 
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
@@ -423,34 +423,11 @@ void FastBmm1Dgrad2_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()) + (strided ? embed : 0));  	// key
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr()));
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr()));          		// grad query
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));          		// grad query
+//    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));          		// grad query
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams] : at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_N,
-//                                   CUBLAS_OP_N,
-//                                   embed,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   static_cast<const void*>(scale ? &alpha : &one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   enable_stream ? heads : batch*heads,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_N,
                                    CUBLAS_OP_N,
                                    embed,
@@ -458,31 +435,54 @@ void FastBmm1Dgrad2_(torch::Tensor &A,
                                    seqlen[i],
                                    static_cast<const void*>(scale ? &alpha : &one),
                                    ptrA,
-                                   a_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
                                    ptrB,
-                                   b_type,
+                                   CUDA_R_16F,
                                    seqlen[i],
                                    seqlen[i]*seqlen[i],
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
-				   ptrD,
-				   d_type,
-				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-				   strided ? 3*embed : embed,
                                    enable_stream ? heads : batch*heads,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_N,
+//                                   CUBLAS_OP_N,
+//                                   embed,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//                                   static_cast<const void*>(scale ? &alpha : &one),
+//                                   ptrA,
+//                                   a_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//                                   ptrB,
+//                                   b_type,
+//                                   seqlen[i],
+//                                   seqlen[i]*seqlen[i],
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//				   ptrD,
+//				   d_type,
+//				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//				   strided ? 3*embed : embed,
+//                                   enable_stream ? heads : batch*heads,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + heads*seqlen[i]*seqlen[i]);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
-        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
+//        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
@@ -513,34 +513,11 @@ void FastBmm2Dgrad2_(torch::Tensor &A,
     void *ptrA = static_cast<void*>(static_cast<half*>(A.data_ptr()));
     void *ptrB = static_cast<void*>(static_cast<half*>(B.data_ptr()));
     void *ptrC = static_cast<void*>(static_cast<half*>(C.data_ptr()) + (strided ? 2*embed : 0));  // grad-value
-    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? 2*embed : 0));  // grad-value
+//    void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? 2*embed : 0));  // grad-value
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
         cublasSetStream(handle, enable_stream ? stream[i%nstreams] : at::cuda::getCurrentCUDAStream());
-//        cublasGemmStridedBatchedEx(handle,
-//                                   CUBLAS_OP_N,
-//                                   CUBLAS_OP_T,
-//                                   embed,
-//                                   seqlen[i],
-//                                   seqlen[i],
-//                                   static_cast<const void*>(&one),
-//                                   ptrA,
-//                                   CUDA_R_16F,
-//				   enable_stream ? heads*embed : batch*heads*embed,
-//                                   embed,
-//                                   ptrB,
-//                                   CUDA_R_16F,
-//                                   seqlen[i],
-//                                   seqlen[i]*seqlen[i],
-//                                   static_cast<const void*>(&zero),
-//                                   ptrC,
-//                                   CUDA_R_16F,
-//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-//                                   strided ? 3*embed : embed,
-//                                   enable_stream ? heads : batch*heads,
-//                                   CUDA_R_32F,
-//                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        cublasGemmStridedBatchedEx(handle,
                                    CUBLAS_OP_N,
                                    CUBLAS_OP_T,
                                    embed,
@@ -548,32 +525,55 @@ void FastBmm2Dgrad2_(torch::Tensor &A,
                                    seqlen[i],
                                    static_cast<const void*>(&one),
                                    ptrA,
-                                   a_type,
+                                   CUDA_R_16F,
 				   enable_stream ? heads*embed : batch*heads*embed,
                                    embed,
                                    ptrB,
-                                   b_type,
+                                   CUDA_R_16F,
                                    seqlen[i],
                                    seqlen[i]*seqlen[i],
                                    static_cast<const void*>(&zero),
                                    ptrC,
-                                   c_type,
+                                   CUDA_R_16F,
                                    (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
                                    strided ? 3*embed : embed,
-				   ptrD,
-				   d_type,
-				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
-				   strided ? 3*embed : embed,
                                    enable_stream ? heads : batch*heads,
-                                   compute_type,
-                                   algo,
-				   solution_index,
-				   flags);
+                                   CUDA_R_32F,
+                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+//        rocblas_gemm_strided_batched_ex(handle,
+//                                   CUBLAS_OP_N,
+//                                   CUBLAS_OP_T,
+//                                   embed,
+//                                   seqlen[i],
+//                                   seqlen[i],
+//                                   static_cast<const void*>(&one),
+//                                   ptrA,
+//                                   a_type,
+//				   enable_stream ? heads*embed : batch*heads*embed,
+//                                   embed,
+//                                   ptrB,
+//                                   b_type,
+//                                   seqlen[i],
+//                                   seqlen[i]*seqlen[i],
+//                                   static_cast<const void*>(&zero),
+//                                   ptrC,
+//                                   c_type,
+//                                   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//                                   strided ? 3*embed : embed,
+//				   ptrD,
+//				   d_type,
+//				   (enable_stream ? 1 : batch) * (strided ? heads*3*embed : heads*embed),
+//				   strided ? 3*embed : embed,
+//                                   enable_stream ? heads : batch*heads,
+//                                   compute_type,
+//                                   algo,
+//				   solution_index,
+//				   flags);
 
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + seqlen[i]*heads*embed);
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + heads*seqlen[i]*seqlen[i]);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
-        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
+//        ptrD = static_cast<void*>(static_cast<half*>(ptrD) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 
     }
     for(int i = 0; i < (enable_stream ? nstreams : 0); i++) {
