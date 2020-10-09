@@ -1,5 +1,3 @@
-mhalib/csrc/hip/
-mhalib/hip/
 mhalib/mhalib.egg-info/
 __pycache__/
 bert.log

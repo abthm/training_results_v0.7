@@ -34,17 +34,17 @@ if (TORCH_MAJOR > 1) or (TORCH_MAJOR == 1 and TORCH_MINOR > 4):
     version_ge_1_5 = ['-DVERSION_GE_1_5']
 version_dependent_macros = version_ge_1_1 + version_ge_1_3 + version_ge_1_5
 
-if is_rocm_pytorch:
-    import shutil
-    with hipify_python.GeneratedFileCleaner(keep_intermediates=True) as clean_ctx:
-        hipify_python.hipify(project_directory=this_dir, output_directory=this_dir, includes="csrc/*",
-				show_detailed=True, is_pytorch_extension=True, clean_ctx=clean_ctx)
+#if is_rocm_pytorch:
+#    import shutil
+#    with hipify_python.GeneratedFileCleaner(keep_intermediates=True) as clean_ctx:
+#        hipify_python.hipify(project_directory=this_dir, output_directory=this_dir, includes="csrc/*",
+#				show_detailed=True, is_pytorch_extension=True, clean_ctx=clean_ctx)
 
 if not is_rocm_pytorch:
     ext_modules.append(
 		CUDAExtension(
 		    name='mhalib',
-		    sources=['mha_funcs.cu'],
+		    sources=['./csrc/mha_funcs.cu'],
 		    extra_compile_args={
 				       'cxx': ['-O3',],
 					'nvcc':['-O3','-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__', 
