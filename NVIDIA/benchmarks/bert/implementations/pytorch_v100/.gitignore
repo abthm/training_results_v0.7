@@ -1,0 +1,10 @@
+*.csv
+*.csv.swp
+*.so
+*.nvvp
+layers/__pycache__/
+results/
+*.swp
+*.log
+__pycache__/
+*.csv.swo

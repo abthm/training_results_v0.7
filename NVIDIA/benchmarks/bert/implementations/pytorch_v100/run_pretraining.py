@@ -376,6 +376,11 @@ def parse_arguments():
                         type=int,
                         default=2,
                         help="Number of epochs to plan seeds for. Same set across all workers.")
+    parser.add_argument('--nvprof',
+                        default=False,
+                        action='store_true',
+                        help="Do profiling or not")
+
     args = parser.parse_args()
 
     # Check we've been given a checkpoint
@@ -622,8 +627,10 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         optimizer.step()
         for param in model.parameters():
             param.grad = None
-        global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1
-
+        if args.fp16:
+            global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1 ####adding if else for compatability with f32 (doesnt have amp)
+        else:
+            global_step += 1
     return global_step
 
 def run_eval(model, eval_dataloader, device, num_eval_examples, first_eval=False, use_cache=False):
@@ -815,147 +822,149 @@ def main():
                 previous_file = data_file
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init_fn=worker_init)
+                with torch.cuda.profiler.profile():
+                    with torch.autograd.profiler.emit_nvtx(args.nvprof,record_shapes=True):
+                        for step, batch in enumerate(train_dataloader):
+                            training_steps += 1
+                            update_step = training_steps % args.gradient_accumulation_steps == 0
 
-                for step, batch in enumerate(train_dataloader):
-                    training_steps += 1
-                    update_step = training_steps % args.gradient_accumulation_steps == 0
+                            batch = [t.to(device) for t in batch]
+                            input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
+                            loss, mlm_acc, _ = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
+                                            masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
+                                            checkpoint_activations=args.checkpoint_activations)
 
-                    batch = [t.to(device) for t in batch]
-                    input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
-                    loss, mlm_acc, _ = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
-                                    masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
-                                    checkpoint_activations=args.checkpoint_activations)
+                            divisor = args.gradient_accumulation_steps
+                            if args.gradient_accumulation_steps > 1:
+                                if not args.allreduce_post_accumulation:
+                                    # this division was merged into predivision
+                                    loss = loss / args.gradient_accumulation_steps
+                                    divisor = 1.0
+                            if args.fp16:
+                                with amp.scale_loss(loss, optimizer, delay_overflow_check=args.allreduce_post_accumulation) as scaled_loss:
+                                    scaled_loss.backward()
+                            else:
+                                loss.backward()
+                            average_loss += loss.item()
 
-                    divisor = args.gradient_accumulation_steps
-                    if args.gradient_accumulation_steps > 1:
-                        if not args.allreduce_post_accumulation:
-                            # this division was merged into predivision
-                            loss = loss / args.gradient_accumulation_steps
-                            divisor = 1.0
-                    if args.fp16:
-                        with amp.scale_loss(loss, optimizer, delay_overflow_check=args.allreduce_post_accumulation) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        loss.backward()
-                    average_loss += loss.item()
+                            if update_step:
+                                lr_scheduler.step()  # learning rate warmup
+                                global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
+                                samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
 
-                    if update_step:
-                        lr_scheduler.step()  # learning rate warmup
-                        global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
-                        samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
+                                if (args.eval_dir and args.eval_iter_samples > 0 and
+                                    samples_trained >= args.eval_iter_start_samples + eval_count * args.eval_iter_samples):
 
-                        if (args.eval_dir and args.eval_iter_samples > 0 and
-                            samples_trained >= args.eval_iter_start_samples + eval_count * args.eval_iter_samples):
+                                    # on first eval, get eval_dataloader
+                                    if eval_count == 0:
+                                       eval_dataloader = eval_dataset_future.result(timeout=None)
 
-                            # on first eval, get eval_dataloader
-                            if eval_count == 0:
-                               eval_dataloader = eval_dataset_future.result(timeout=None)
-
-                            samples_trained_prev = samples_trained
-                            eval_avg_loss, eval_avg_mlm_accuracy = run_eval(model, eval_dataloader, device, args.num_eval_examples,
-                                                                            first_eval=(eval_count == 0), use_cache=args.cache_eval_data)
-                            if utils.is_main_process():
-                                mlperf_logger.log_event(key=mlperf_logger.constants.EVAL_ACCURACY, value=eval_avg_mlm_accuracy, metadata={'epoch_num': epoch}, sync=False)
-                                print({"global_steps": global_step, "eval_loss": eval_avg_loss, "eval_mlm_accuracy":eval_avg_mlm_accuracy})
-
-                            if args.target_mlm_accuracy:
-                                if eval_avg_mlm_accuracy >= args.target_mlm_accuracy:
-                                    end_training, converged = True, True
+                                    samples_trained_prev = samples_trained
+                                    eval_avg_loss, eval_avg_mlm_accuracy = run_eval(model, eval_dataloader, device, args.num_eval_examples,
+                                                                                    first_eval=(eval_count == 0), use_cache=args.cache_eval_data)
                                     if utils.is_main_process():
-                                        print("%f > %f, Target MLM Accuracy reached at %d"%(eval_avg_mlm_accuracy, args.target_mlm_accuracy, global_step))
+                                        mlperf_logger.log_event(key=mlperf_logger.constants.EVAL_ACCURACY, value=eval_avg_mlm_accuracy, metadata={'epoch_num': epoch}, sync=False)
+                                        print({"global_steps": global_step, "eval_loss": eval_avg_loss, "eval_mlm_accuracy":eval_avg_mlm_accuracy})
 
-                            eval_count += 1
+                                    if args.target_mlm_accuracy:
+                                        if eval_avg_mlm_accuracy >= args.target_mlm_accuracy:
+                                            end_training, converged = True, True
+                                            if utils.is_main_process():
+                                                print("%f > %f, Target MLM Accuracy reached at %d"%(eval_avg_mlm_accuracy, args.target_mlm_accuracy, global_step))
 
-                    if args.target_mlm_accuracy and args.train_mlm_accuracy_window_size > 0:
-                        accuracy_scores.append(mlm_acc)
-                        if update_step:
-                            accuracy_scores = accuracy_scores[-args.train_mlm_accuracy_window_size * args.gradient_accumulation_steps:]
-                            avg_mlm_accuracy[0] = sum(accuracy_scores) / len(accuracy_scores)
-                            torch.distributed.all_reduce(avg_mlm_accuracy, op=torch.distributed.ReduceOp.SUM)
-                            avg_mlm_accuracy /= torch.distributed.get_world_size()
+                                    eval_count += 1
 
-                    if training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
-                        samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
-                        if utils.is_main_process():
-                            time_interval = time.time() - now_time
-                            step_interval = global_step - now_step
-                            skip_interval = skipped_steps - now_skipped
-                            now_time = time.time()
-                            now_step = global_step
-                            now_skipped = skipped_steps
-                            training_perf = args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu \
-                                            * (step_interval + skip_interval) / time_interval
-                            
-                            if args.train_mlm_accuracy_window_size > 0:
-                                print({"training_steps": training_steps,
-                                      "average_loss": average_loss / (args.log_freq * divisor),
-                                      "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
-                                      "learning_rate": optimizer.param_groups[0]['lr'],
-                                      "seq/s": training_perf,
-                                      "global_steps": now_step,
-                                      "samples_trained": samples_trained,
-                                      "skipped_steps": now_skipped,
-                                      "timestamp": now_time,
-                                      "mlm_accuracy": avg_mlm_accuracy[0].item()})
-                            else:
-                                print({"training_steps": training_steps,
-                                      "average_loss": average_loss / (args.log_freq * divisor),
-                                      "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
-                                      "learning_rate": optimizer.param_groups[0]['lr'],
-                                      "seq/s": training_perf,
-                                      "global_steps": now_step,
-                                      "samples_trained": samples_trained,
-                                      "skipped_steps": now_skipped,
-                                      "timestamp": now_time})
+                            if args.target_mlm_accuracy and args.train_mlm_accuracy_window_size > 0:
+                                accuracy_scores.append(mlm_acc)
+                                if update_step:
+                                    accuracy_scores = accuracy_scores[-args.train_mlm_accuracy_window_size * args.gradient_accumulation_steps:]
+                                    avg_mlm_accuracy[0] = sum(accuracy_scores) / len(accuracy_scores)
+                                    torch.distributed.all_reduce(avg_mlm_accuracy, op=torch.distributed.ReduceOp.SUM)
+                                    avg_mlm_accuracy /= torch.distributed.get_world_size()
 
-                        average_loss = 0
+                            if training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
+                                samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
+                                if utils.is_main_process():
+                                    time_interval = time.time() - now_time
+                                    step_interval = global_step - now_step
+                                    skip_interval = skipped_steps - now_skipped
+                                    now_time = time.time()
+                                    now_step = global_step
+                                    now_skipped = skipped_steps
+                                    training_perf = args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu \
+                                                    * (step_interval + skip_interval) / time_interval
+                                    
+                                    if args.train_mlm_accuracy_window_size > 0:
+                                        print({"training_steps": training_steps,
+                                              "average_loss": average_loss / (args.log_freq * divisor),
+                                              "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
+                                              "learning_rate": optimizer.param_groups[0]['lr'],
+                                              "seq/s": training_perf,
+                                              "global_steps": now_step,
+                                              "samples_trained": samples_trained,
+                                              "skipped_steps": now_skipped,
+                                              "timestamp": now_time,
+                                              "mlm_accuracy": avg_mlm_accuracy[0].item()})
+                                    else:
+                                        print({"training_steps": training_steps,
+                                              "average_loss": average_loss / (args.log_freq * divisor),
+                                              "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
+                                              "learning_rate": optimizer.param_groups[0]['lr'],
+                                              "seq/s": training_perf,
+                                              "global_steps": now_step,
+                                              "samples_trained": samples_trained,
+                                              "skipped_steps": now_skipped,
+                                              "timestamp": now_time})
 
-                    if global_step >= args.max_steps or end_training:
-                        status = 'success' if converged else 'aborted'
-                        end_training = True
-                        train_time_raw = time.time() - raw_train_start
-                        last_num_steps = int(training_steps / args.gradient_accumulation_steps) % args.log_freq
-                        last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
-                        average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
-                        average_loss = average_loss / (last_num_steps * divisor)
-                        if (torch.distributed.is_initialized()):
-                            average_loss /= torch.distributed.get_world_size()
-                            torch.distributed.all_reduce(average_loss)
-                        final_loss = average_loss.item()
-                        if utils.is_main_process():
-                            if args.train_mlm_accuracy_window_size > 0:
-                                print((epoch, training_steps / args.gradient_accumulation_steps, ), {"final_loss": final_loss,
-                                    "final_mlm_accuracy": avg_mlm_accuracy[0].item()})
-                            else:
-                                print((epoch, training_steps / args.gradient_accumulation_steps, ), {"final_loss": final_loss})
+                                average_loss = 0
 
-                    if end_training or (samples_trained - samples_trained_prev >= args.num_samples_per_checkpoint and samples_trained >= args.min_samples_to_start_checkpoints):
-                        samples_trained_prev = samples_trained
-                        if utils.is_main_process() and not args.skip_checkpoint:
-                            # Save a trained model
-                            model_to_save = model.module if hasattr(model,
-                                                                    'module') else model  # Only save the model it-self
-                            if args.phase2:
-                                output_save_file = os.path.join(args.output_dir, "phase2_ckpt_{}.pt".format(samples_trained))
-                            else:
-                                output_save_file = os.path.join(args.output_dir, "phase1_ckpt_{}.pt".format(samples_trained))
-                            if args.do_train:
-                                torch.save({'model': model_to_save.state_dict(),
-                                            'optimizer': optimizer.state_dict(),
-                                            'master params': list(amp.master_params(optimizer)),
-                                            'files': [f_id] + files}, output_save_file)
+                            if global_step >= args.max_steps or end_training:
+                                status = 'success' if converged else 'aborted'
+                                end_training = True
+                                train_time_raw = time.time() - raw_train_start
+                                last_num_steps = int(training_steps / args.gradient_accumulation_steps) % args.log_freq
+                                last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
+                                average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
+                                average_loss = average_loss / (last_num_steps * divisor)
+                                if (torch.distributed.is_initialized()):
+                                    average_loss /= torch.distributed.get_world_size()
+                                    torch.distributed.all_reduce(average_loss)
+                                final_loss = average_loss.item()
+                                if utils.is_main_process():
+                                    if args.train_mlm_accuracy_window_size > 0:
+                                        print((epoch, training_steps / args.gradient_accumulation_steps, ), {"final_loss": final_loss,
+                                            "final_mlm_accuracy": avg_mlm_accuracy[0].item()})
+                                    else:
+                                        print((epoch, training_steps / args.gradient_accumulation_steps, ), {"final_loss": final_loss})
 
-                                most_recent_ckpts_paths.append(output_save_file)
-                                if len(most_recent_ckpts_paths) > args.keep_n_most_recent_checkpoints:
-                                    ckpt_to_be_removed = most_recent_ckpts_paths.pop(0)
-                                    os.remove(ckpt_to_be_removed)
-                            
-                        if samples_trained >= args.max_samples_termination or end_training:
-                            status = 'success' if converged else 'aborted' 
-                            end_training = True
-                            break
+                            if end_training or (samples_trained - samples_trained_prev >= args.num_samples_per_checkpoint and samples_trained >= args.min_samples_to_start_checkpoints):
+                                samples_trained_prev = samples_trained
+                                if utils.is_main_process() and not args.skip_checkpoint:
+                                    # Save a trained model
+                                    model_to_save = model.module if hasattr(model,
+                                                                            'module') else model  # Only save the model it-self
+                                    if args.phase2:
+                                        output_save_file = os.path.join(args.output_dir, "phase2_ckpt_{}.pt".format(samples_trained))
+                                    else:
+                                        output_save_file = os.path.join(args.output_dir, "phase1_ckpt_{}.pt".format(samples_trained))
+                                    if args.do_train:
+                                        torch.save({'model': model_to_save.state_dict(),
+                                                    'optimizer': optimizer.state_dict(),
+                                                    'master params': list(amp.master_params(optimizer)),
+                                                    'files': [f_id] + files}, output_save_file)
 
-                del train_dataloader
+                                        most_recent_ckpts_paths.append(output_save_file)
+                                        if len(most_recent_ckpts_paths) > args.keep_n_most_recent_checkpoints:
+                                            ckpt_to_be_removed = most_recent_ckpts_paths.pop(0)
+                                            os.remove(ckpt_to_be_removed)
+                                        
+                                if samples_trained >= args.max_samples_termination or end_training:
+                                    status = 'success' if converged else 'aborted' 
+                                    end_training = True
+                                    break
+
+                            torch.cuda.nvtx.mark("userMarker: batchEnd")
+                        del train_dataloader
 
                 if samples_trained >= args.max_samples_termination or end_training:
                     status = 'success' if converged else 'aborted'

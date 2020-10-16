@@ -500,12 +500,14 @@ class BertLayer(nn.Module):
         self.output = BertOutput(config)
 
     def forward(self, hidden_states, attention_mask, seqlen, batch):
+        torch.cuda.nvtx.mark("userMarker: Encoder Start")
         if self.unpad:
             attention_output = self.attention(hidden_states, attention_mask, seqlen, batch)
         else:
             attention_output = self.attention(hidden_states, attention_mask)
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
+        torch.cuda.nvtx.mark("userMarker: Encoder End")
         return layer_output
 
 class BertEncoder(nn.Module):
