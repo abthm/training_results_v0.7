@@ -80,6 +80,7 @@ class WorkerInitObj(object):
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, worker_init_fn):
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
+    print("-----train_data----",train_data)
     train_sampler = RandomSampler(train_data)
     train_dataloader = DataLoader(train_data, sampler=train_sampler,
         batch_size=args.train_batch_size, num_workers=4, worker_init_fn=worker_init_fn,
@@ -804,8 +805,9 @@ def main():
             overflow_buf = None
             if args.allreduce_post_accumulation:
                 overflow_buf = torch.cuda.IntTensor([0])
-
-            for f_id in range(f_start_id + 1, len(files)):
+            print("------len(files)_----",len(files)) ###len(files) is 504 (num of hdf5 files)
+            print("---num_files-------",num_files) ## same num of hdf5 files > 504
+            for f_id in range(f_start_id + 1, len(files)): ## 1hdf5 file for each gpu for 1 epoch. Next epoch new hdf5 file is loaded
                 if torch.distributed.get_world_size() > num_files:
                     data_file = files[(f_id*torch.distributed.get_world_size() + torch.distributed.get_rank() +
                                        remainder * f_id) % num_files]
@@ -823,10 +825,17 @@ def main():
                     #if training_steps == 1: ### to run 1 training_step to get rocblas calls
                     #    break
                     training_steps += 1
+                    print("-------batch,shape------",len(batch), len(batch[0]), len(batch[0][0])) ###5,8,512
+                    print("--batch input idx----", batch[0][0])
                     update_step = training_steps % args.gradient_accumulation_steps == 0
 
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
+                    print("---input_ids seq 1-----",input_ids[1])
+                    print("---segment_ids seq 1-----",segment_ids[1])
+                    print("---input_mask seq 1-----",input_mask[1])
+                    print("-----masked_lm_labels seq 1----",masked_lm_labels[1])
+                    print("-----next_sentence_labels seq 1-------",next_sentence_labels[1])
                     loss, mlm_acc, _ = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
                                     masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
                                     checkpoint_activations=args.checkpoint_activations)

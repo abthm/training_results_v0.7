@@ -334,10 +334,15 @@ class BertEmbeddings(nn.Module):
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids)
-
+        print("---input_ids.shape before embedding----",input_ids.shape)
+        print("-----position_ids.shape b4 embedding----",position_ids.shape, position_ids) #### these are created with arange(seqlen)
+        print("-----token_type_ids shape b4 embedding----",token_type_ids.shape, token_type_ids)
         words_embeddings = self.word_embeddings(input_ids)
+        print("words_embeddings", words_embeddings)
         position_embeddings = self.position_embeddings(position_ids)
+        print("position_embeddings",position_embeddings)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        print("token_type_embeddings",token_type_embeddings)
 
         embeddings = words_embeddings + position_embeddings + token_type_embeddings
         embeddings = self.LayerNorm(embeddings)

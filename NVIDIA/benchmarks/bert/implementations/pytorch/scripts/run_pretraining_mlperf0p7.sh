@@ -12,13 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+sudo pkill python3.6
 export NCCL_MIN_NCHANNELS=4
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 train_batch_size=${1:-8192}
 learning_rate=${2:-"6e-3"}
 precision=${3:-"fp16"}
-num_gpus=${4:-8}
+num_gpus=${4:-1}
 warmup_proportion=${5:-"0.0"}
 train_steps=${6:-7038}
 #save_checkpoint_steps=${7:-200}
@@ -30,7 +30,7 @@ seed=${12:-$RANDOM}
 job_name=${13:-"bert_lamb_pretraining"}
 allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
-train_batch_size_phase2=${17:-27}
+train_batch_size_phase2=${17:-8}
 learning_rate_phase2=${18:-"3.5e-4"}
 warmup_proportion_phase2=${19:-"0"}
 train_steps_phase2=${20:-13700}
