@@ -26,11 +26,12 @@ resume_training=${8:-"false"}
 create_logfile=${9:-"true"}
 accumulate_gradients=${10:-"true"}
 gradient_accumulation_steps=${11:-128}
-seed=${12:-$RANDOM}
+#seed=${12:-$RANDOM}
+seed=11566
 job_name=${13:-"bert_lamb_pretraining"}
 allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
-train_batch_size_phase2=${17:-4}
+train_batch_size_phase2=${17:-27}
 learning_rate_phase2=${18:-"3.5e-4"}
 warmup_proportion_phase2=${19:-"0"}
 train_steps_phase2=${20:-1}
@@ -207,7 +208,7 @@ CMD+=" --target_mlm_accuracy=0.712"
 CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha" ##remove unpad to try apex contrib mha, fp16 removed, remove skip_checkpoint
 CMD+=" --init_checkpoint=$init_checkpoint"
 CMD+=" --enable_fuse_dropout"
-CMD+=" --nvprof"
+#CMD+=" --nvprof"
 
 SUB="nvprof"
 if grep -q "$SUB" <<< "$CMD" ; then
@@ -217,9 +218,9 @@ if grep -q "$SUB" <<< "$CMD" ; then
 	export LOCAL_RANK=0
 	export RANK=0
 	CMD+=" --local_rank=0"
-	#CMD="nvprof --profile-from-start off --print-gpu-trace --print-api-trace --csv --normalized-time-unit us --log-file nvprof-mlperf-v0.7-10-12-2020-clk-fixed.csv python3.6 $CMD"
+	CMD="nvprof --profile-from-start off --print-gpu-trace --print-api-trace --csv --normalized-time-unit us --log-file nvprof-mlperf-v0.7-10-12-2020-clk-fixed.csv python3.6 $CMD"
 	#CMD="nvprof --profile-child-processes --print-gpu-trace --demangling on --csv --log-file nvprof-new-cmd-mlperfc0p7-%p.csv python3.6 $CMD"
-	CMD="nvprof -o nvprof-mlperfv0p7-bs4.nvvp python3.6 $CMD"
+	#CMD="nvprof -o nvprof-mlperfv0p7-bs4.nvvp python3.6 $CMD"
 else
 	CMD="python3.6 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 fi

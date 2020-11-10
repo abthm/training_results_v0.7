@@ -1,6 +1,6 @@
 import torch
 import mhalib
-
+import settings
 ###########################################################################################
 
 class Bmm2Function(torch.autograd.Function):
@@ -78,7 +78,11 @@ class Bmm2StridedFunction(torch.autograd.Function):
         if timers: timers['start_fprop'].record()
         mhalib.FastBmm2Fprop(mixed, batch1, output, batch, seqlen, heads, embed, False, True, stream, sync)
         if timers: timers['stop_fprop'].record()
-
+        torch.cuda.synchronize()
+        bmm2_elapsed_time = timers['start_fprop'].elapsed_time(timers['stop_fprop'])
+        settings.per_encoder_event_time.append(bmm2_elapsed_time)
+        settings.per_iter_event_time.append(settings.per_encoder_event_time)
+        settings.per_encoder_event_time=[]
         return output[:ntokens]
 
     @staticmethod
@@ -125,6 +129,13 @@ class Bmm2Strided(torch.nn.Module):
             self.timers = None
 
     def forward(self, batch1, mixed, batch, seqlen):
+        self.timers = {'start_fprop':torch.cuda.Event(enable_timing=True),
+               'start_dgrad':torch.cuda.Event(enable_timing=True),
+               'start_wgrad':torch.cuda.Event(enable_timing=True),
+               'stop_fprop':torch.cuda.Event(enable_timing=True),
+               'stop_dgrad':torch.cuda.Event(enable_timing=True),
+               'stop_wgrad':torch.cuda.Event(enable_timing=True)}
+
         return Bmm2StridedFunction.apply(batch1, mixed, seqlen, batch, self.maxseqlen, self.heads, self.embed, self.stream, self.sync, self.timers)
 
 ###########################################################################################

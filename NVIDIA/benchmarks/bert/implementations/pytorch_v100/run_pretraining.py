@@ -65,6 +65,7 @@ from schedulers import LinearWarmUpScheduler, LinearWarmupPolyDecayScheduler
 import mlperf_logger
 
 from mhalib import *
+import settings
 
 # Global variables
 skipped_steps = 0
@@ -847,6 +848,9 @@ def main():
                                 loss.backward()
                             average_loss += loss.item()
 
+                            settings.all_iters_event_time.append(settings.per_iter_event_time)
+                            settings.per_iter_event_time=[]
+
                             if update_step:
                                 lr_scheduler.step()  # learning rate warmup
                                 global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
@@ -964,6 +968,22 @@ def main():
                                     break
 
                             torch.cuda.nvtx.mark("userMarker: batchEnd")
+                        print(settings.all_iters_event_time)
+                        ###write to csv
+                        f = open('event_time.csv', "w")
+                        fwriter = csv.writer(f)
+                        header = [' ', 'iter',' ', ' ', ' '] * len(settings.all_iters_event_time)
+                        header1 = [' ','bmm1 (ms)','softmax (ms)','bmm2 (ms)', ' '] * len(settings.all_iters_event_time)
+                        fwriter.writerow(header)
+                        fwriter.writerow(header1)
+
+                        for j in range(24):
+                            row=['encoder'+str(j)]
+                            for i in range(len(settings.all_iters_event_time)):
+                                row=row+[' ']+settings.all_iters_event_time[i][j]
+                            fwriter.writerow(row)
+                        f.close()
+                        ########
                         del train_dataloader
 
                 if samples_trained >= args.max_samples_termination or end_training:

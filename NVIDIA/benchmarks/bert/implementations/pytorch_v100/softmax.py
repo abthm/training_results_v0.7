@@ -1,6 +1,6 @@
 import torch
 import mhalib
-
+import settings
 ###########################################################################################
 
 class FastSoftmaxFunction(torch.autograd.Function):
@@ -103,7 +103,9 @@ class FastMaskSoftmaxDropoutFunction(torch.autograd.Function):
         if timers: timers['start_fprop'].record()
         output, dropout_mask, = mhalib.FastMaskSoftmaxDropoutFprop(input, mask, batch, seqlen, heads, dropout_prob, stream, sync, is_training)
         if timers: timers['stop_fprop'].record()
-
+        torch.cuda.synchronize()
+        softmax_elapsed_time = timers['start_fprop'].elapsed_time(timers['stop_fprop'])
+        settings.per_encoder_event_time.append(softmax_elapsed_time)
         cxt.save_for_backward(input,dropout_mask,seqlen)
         cxt.dim = dim
         cxt.batch = batch
@@ -143,6 +145,10 @@ class FastMaskSoftmaxDropout(torch.nn.Module):
             self.timers = None
 
     def forward(self, input, mask, batch, seqlen, heads, is_training):
+        self.timers = {'start_fprop':torch.cuda.Event(enable_timing=True),
+                       'start_dgrad':torch.cuda.Event(enable_timing=True),
+                       'stop_fprop':torch.cuda.Event(enable_timing=True),
+                       'stop_dgrad':torch.cuda.Event(enable_timing=True)}
         return FastMaskSoftmaxDropoutFunction.apply(input, mask, self.dim, batch, seqlen, heads, self.dropout_prob, self.stream, self.sync, self.timers, is_training)
 
 ###########################################################################################
