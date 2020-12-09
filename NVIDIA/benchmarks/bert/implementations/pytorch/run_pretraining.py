@@ -42,9 +42,11 @@ from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from modeling import BertForPreTraining, BertConfig
 from apex.optimizers import FusedLAMB
+#from optimization import BertAdam
 from schedulers import LinearWarmupPolyDecayScheduler
 
 import utils
+import settings
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Dataset
@@ -530,6 +532,7 @@ def prepare_model_and_optimizer(args, device):
     optimizer = FusedLAMB(optimizer_grouped_parameters,
                           lr=args.learning_rate,
                           betas=(args.opt_lamb_beta_1, args.opt_lamb_beta_2))
+    #optimizer = BertAdam(optimizer_grouped_parameters,lr=args.learning_rate, warmup=args.warmup_proportion, t_total=args.max_steps, schedule='warmup_poly')
     mlperf_logger.log_event(key='opt_epsilon', value=optimizer.defaults['eps'],
                             sync=False)
     b1, b2 = optimizer.defaults['betas']
@@ -576,6 +579,7 @@ def prepare_model_and_optimizer(args, device):
             flat_dist_call([param.data for param in model.parameters()], torch.distributed.broadcast, (0,) )
 
     return model, optimizer, lr_scheduler, checkpoint, global_step
+    #return model, optimizer, checkpoint, global_step
 
 def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
@@ -709,6 +713,7 @@ def main():
         print(args)
     # Prepare optimizer
     model, optimizer, lr_scheduler, checkpoint, global_step = prepare_model_and_optimizer(args, device)
+    #model, optimizer, checkpoint, global_step = prepare_model_and_optimizer(args, device)
     samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
 
     if args.unpad:
@@ -820,7 +825,7 @@ def main():
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init_fn=worker_init)
                 #avg_seqs_per_sec = []
-                #verage_loss_list=[]
+                #average_loss_list=[]
                 #mlm_acc_list=[]
                 if args.rocprof: ##tagp
                     enable_profile = True
@@ -855,7 +860,7 @@ def main():
                         average_loss += loss.item()
 
                         if update_step:
-                            lr_scheduler.step()  # learning rate warmup
+                            #lr_scheduler.step()  # learning rate warmup
                             global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
                             samples_trained = global_step * args.train_batch_size * args.gradient_accumulation_steps * args.n_gpu
 
@@ -1000,8 +1005,9 @@ def main():
                               metadata={'status': status}, sync=False)
 
         ##Save for plots
-        #np.save('mi100-f16-mhalib-loss',average_loss_list)
-        #np.save('mi100-f16-mhalib-mlm-acc',mlm_acc_list)
+        #np.save('mi100-f16-mhalib-loss-bertadam-fln',average_loss_list)
+        #np.save('mi100-f16-mhalib-mlm-acc-bertadam-fln',mlm_acc_list)
+        #np.save('ntokens-list',settings.ntokens_list)
     return args, final_loss, train_time_raw
 
 def global_batch_size(args):
