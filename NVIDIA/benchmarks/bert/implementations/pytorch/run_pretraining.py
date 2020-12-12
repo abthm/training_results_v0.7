@@ -822,16 +822,18 @@ def main():
                 #avg_seqs_per_sec = []
                 #verage_loss_list=[]
                 #mlm_acc_list=[]
-                if args.rocprof: ##tagp
-                    enable_profile = True
-                else:
-                    enable_profile = False
+#                if args.rocprof: ##tagp
+#                    enable_profile = True
+#                else:
+                enable_profile = False
 
-                with torch.autograd.profiler.emit_nvtx(enable_profile, record_shapes=True):
-                    for step, batch in enumerate(train_dataloader):
-                        #torch.cuda.synchronize() ##added to prevent mem access fault in mGPU run, dint help
-                        #if training_steps == 1: ### to run 1 training_step to get rocblas calls
-                        #    break
+                #with torch.autograd.profiler.emit_nvtx(enable_profile, record_shapes=True):
+                for step, batch in enumerate(train_dataloader):
+                    #torch.cuda.synchronize() ##added to prevent mem access fault in mGPU run, dint help
+                    if training_steps == 10: ### to run 1 training_step to get rocblas calls
+                        enable_profile=True
+                        #break
+                    with torch.autograd.profiler.emit_nvtx(enable_profile, record_shapes=True):
                         training_steps += 1
                         update_step = training_steps % args.gradient_accumulation_steps == 0
 
