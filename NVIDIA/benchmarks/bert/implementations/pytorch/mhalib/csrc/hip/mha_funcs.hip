@@ -29,7 +29,7 @@
 
 // global variables.
 hipStream_t stream[nstreams];
-rocblas_handle handle;
+rocblas_handle handle[nstreams];
 
 rocblas_datatype a_type       = rocblas_datatype_f16_r;
 rocblas_datatype b_type       = rocblas_datatype_f16_r;
@@ -67,7 +67,7 @@ void FastBmm1Fprop_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_transpose,
 //                                   rocblas_operation_none,
@@ -91,7 +91,7 @@ void FastBmm1Fprop_(torch::Tensor &A,
 //                                   enable_stream ? heads : batch*heads,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_transpose,
                                    rocblas_operation_none,
                                    seqlen[i],
@@ -156,7 +156,7 @@ void FastBmm2Fprop_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_none,
 //                                   rocblas_operation_none,
@@ -180,7 +180,7 @@ void FastBmm2Fprop_(torch::Tensor &A,
 //                                   enable_stream ? heads : batch*heads,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_none,
                                    rocblas_operation_none,
                                    embed,
@@ -246,7 +246,7 @@ void FastBmm1Dgrad1_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? embed : 0)); 	// grad_key
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_none,
 //                                   rocblas_operation_transpose,
@@ -270,7 +270,7 @@ void FastBmm1Dgrad1_(torch::Tensor &A,
 //                                   enable_stream ? heads : heads*batch,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_none,
                                    rocblas_operation_transpose,
                                    embed,
@@ -336,7 +336,7 @@ void FastBmm2Dgrad1_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_transpose,
 //                                   rocblas_operation_none,
@@ -360,7 +360,7 @@ void FastBmm2Dgrad1_(torch::Tensor &A,
 //                                   enable_stream ? heads : batch*heads,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_transpose,
                                    rocblas_operation_none,
                                    seqlen[i],
@@ -426,7 +426,7 @@ void FastBmm1Dgrad2_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));          		// grad query
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_none,
 //                                   rocblas_operation_none,
@@ -450,7 +450,7 @@ void FastBmm1Dgrad2_(torch::Tensor &A,
 //                                   enable_stream ? heads : batch*heads,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_none,
                                    rocblas_operation_none,
                                    embed,
@@ -516,7 +516,7 @@ void FastBmm2Dgrad2_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()) + (strided ? 2*embed : 0));  // grad-value
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
-        rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
+        //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams] : at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_none,
 //                                   rocblas_operation_transpose,
@@ -540,7 +540,7 @@ void FastBmm2Dgrad2_(torch::Tensor &A,
 //                                   enable_stream ? heads : batch*heads,
 //                                   hipR32F,
 //                                   CUBLAS_GEMM_DEFAULT_TENSOR_OP);
-        rocblas_gemm_strided_batched_ex(handle,
+        rocblas_gemm_strided_batched_ex(handle[i],
                                    rocblas_operation_none,
                                    rocblas_operation_transpose,
                                    embed,
@@ -768,7 +768,13 @@ void init_mha_cuda_extension()
     }
 
     // CuBlas Handle.
-    rocblas_create_handle(&handle);
+    for(int i = 0; i < nstreams; i++) {
+    	rocblas_create_handle(&handle[i]);
+	rocblas_set_stream(handle[i], stream[i]);
+    }
+
+
+    //rocblas_create_handle(&handle);
     //rocblas_set_math_mode(handle, CUBLAS_TENSOR_OP_MATH);
 }
 
