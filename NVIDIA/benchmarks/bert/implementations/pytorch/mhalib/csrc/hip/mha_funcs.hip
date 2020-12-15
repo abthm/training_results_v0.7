@@ -30,6 +30,7 @@
 // global variables.
 hipStream_t stream[nstreams];
 rocblas_handle handle[nstreams];
+//rocblas_handle handle;
 
 rocblas_datatype a_type       = rocblas_datatype_f16_r;
 rocblas_datatype b_type       = rocblas_datatype_f16_r;
@@ -56,7 +57,7 @@ void FastBmm1Fprop_(torch::Tensor &A,
 			 bool enable_stream,
 			 bool sync)
 {
-
+    //printf("----using mhalib----"); 
     float one = 1.0, zero = 0.0, alpha = 1.0 / sqrt(static_cast<float>(embed));
 
     int *seqlen = static_cast<int*>(seq_len.data_ptr());
@@ -770,7 +771,7 @@ void init_mha_cuda_extension()
     // CuBlas Handle.
     for(int i = 0; i < nstreams; i++) {
     	rocblas_create_handle(&handle[i]);
-	rocblas_set_stream(handle[i], stream[i]);
+    	rocblas_set_stream(handle[i], stream[i]);
     }
 
 
