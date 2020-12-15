@@ -18,3 +18,4 @@ rocblas*.csv
 cleanup_scripts/hdf5/
 mlperf_tfrecords/
 rocprof_out.csv
+*.log
