@@ -8,3 +8,5 @@ results/
 *.log
 __pycache__/
 *.csv.swo
+*.npy
+*.png

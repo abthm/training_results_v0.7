@@ -824,6 +824,8 @@ def main():
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init_fn=worker_init)
                 with torch.cuda.profiler.profile():
                     with torch.autograd.profiler.emit_nvtx(args.nvprof,record_shapes=True):
+                        #average_loss_list = []
+                        #mlm_acc_list = []                        
                         for step, batch in enumerate(train_dataloader):
                             training_steps += 1
                             update_step = training_steps % args.gradient_accumulation_steps == 0
@@ -915,7 +917,8 @@ def main():
                                               "samples_trained": samples_trained,
                                               "skipped_steps": now_skipped,
                                               "timestamp": now_time})
-
+                                #average_loss_list.append(average_loss)
+                                #mlm_acc_list.append(mlm_acc)
                                 average_loss = 0
 
                             if global_step >= args.max_steps or end_training:
@@ -988,6 +991,20 @@ def main():
                                 sync=False)
         mlperf_logger.log_end(key=mlperf_logger.constants.RUN_STOP,
                               metadata={'status': status}, sync=False)
+
+#        print("----len of loss-------",len(average_loss_list))
+#        from matplotlib import pyplot as plt
+#        plt.plot(average_loss_list,'r',label='loss')
+#        plt.plot(mlm_acc_list,'g',label='mlm_acc')
+#        plt.xticks(np.arange(0, len(average_loss_list), 1000))
+#        plt.xlabel('steps')
+#        #plt.ylabel('loss')
+#        plt.legend()
+#        plt.savefig('v100-f32-oldcodepath-bs8-12-9-10.png')
+#
+#        ##SAVE AS numpy in case plot fails
+#        np.save('v100-f32-oldcodepath-bs8-12-9-10',average_loss_list)
+#        np.save('v100-f32-oldcodepath-bs8-12-9-10',mlm_acc_list)
 
     return args, final_loss, train_time_raw
 
