@@ -38,7 +38,7 @@ from torch.utils import checkpoint
 from file_utils import cached_path
 from layers.fused_gelu import bias_gelu_impl as bias_gelu
 from utils import get_rank
-
+import settings
 import mhalib
 from mha import *
 
@@ -551,6 +551,7 @@ class BertEncoder(nn.Module):
             #print("-----maxseqlen------",maxseqlen)
             #print("------hidden_size------",hidden_size)
             attention_indices, attention_mask, seqlen, ntokens = generate_mask(attention_mask, self.num_attention_heads, pad=self.pad, fuse_mask=self.fuse_mask)
+            #settings.ntokens_list.append(ntokens)
             if self.pad == True and self.enable_stream == False:
                 hidden_states = hidden_states.view(batch,maxseqlen,hidden_size).permute(1,0,2).contiguous().view(batch*maxseqlen,hidden_size).contiguous()
             if self.pad == True and self.enable_stream == True:
