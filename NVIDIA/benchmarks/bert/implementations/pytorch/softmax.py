@@ -101,6 +101,11 @@ class FastMaskSoftmaxDropoutFunction(torch.autograd.Function):
     @staticmethod
     def forward(cxt, input, mask, dim, batch, seqlen, heads, dropout_prob, stream, sync, timers, is_training):
         if timers: timers['start_fprop'].record()
+        #print("---input----",input.size())
+        #print("---mask----",mask.size())
+        #print("---batch----",batch)
+        #print("---seqlen----",seqlen)
+        #print("----heads-----",heads)
         output, dropout_mask, = mhalib.FastMaskSoftmaxDropoutFprop(input, mask, batch, seqlen, heads, dropout_prob, stream, sync, is_training)
         if timers: timers['stop_fprop'].record()
 

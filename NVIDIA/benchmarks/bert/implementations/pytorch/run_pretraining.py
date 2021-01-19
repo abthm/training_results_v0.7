@@ -42,7 +42,7 @@ from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor
 from modeling import BertForPreTraining, BertConfig
 from apex.optimizers import FusedLAMB
-#from optimization import BertAdam
+from optimization import BertAdam
 from schedulers import LinearWarmupPolyDecayScheduler
 
 import utils
@@ -82,7 +82,9 @@ class WorkerInitObj(object):
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, worker_init_fn):
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
-    train_sampler = RandomSampler(train_data)
+    #train_sampler = RandomSampler(train_data)
+    ###Disbale shuffling
+    train_sampler = SequentialSampler(train_data)
     train_dataloader = DataLoader(train_data, sampler=train_sampler,
         batch_size=args.train_batch_size, num_workers=4, worker_init_fn=worker_init_fn,
         pin_memory=True)
@@ -385,8 +387,9 @@ def parse_arguments():
     args = parser.parse_args()
 
     # Check we've been given a checkpoint
-    assert args.init_checkpoint is not None or args.init_tf_checkpoint is not None or found_resume_checkpoint(args), \
-        "Must specify --init_checkpoint, --init_tf_checkpoint or have ckpt to resume from in --output_dir of the form *.pt"
+    if args.phase2: ### If cindition added for ph1 in particular
+        assert args.init_checkpoint is not None or args.init_tf_checkpoint is not None or found_resume_checkpoint(args), \
+            "Must specify --init_checkpoint, --init_tf_checkpoint or have ckpt to resume from in --output_dir of the form *.pt"
 
     assert not (args.init_checkpoint is not None and args.init_tf_checkpoint is not None), \
             "Can only specify one of --init_checkpoint and --init_tf_checkpoint"
@@ -492,31 +495,37 @@ def prepare_model_and_optimizer(args, device):
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
 
-    # Load from Pyt checkpoint - either given as init_checkpoint, or picked up from output_dir if found
-    if args.init_checkpoint is not None or found_resume_checkpoint(args):
-        # Prepare model
-
+    ### Added for ph1
+    if not args.resume_from_checkpoint:
+        global_step = 0
         model = BertForPreTraining(config)
-        if args.init_checkpoint is None: # finding checkpoint in output_dir
-            checkpoint_str = "phase2_ckpt_*.pt" if args.phase2 else "phase1_ckpt_*.pt"
-            model_names = [f for f in glob.glob(os.path.join(args.output_dir, checkpoint_str))]
-            global_step = max([int(x.split('.pt')[0].split('_')[-1].strip()) for x in model_names])
-            args.resume_step = global_step #used for throughput computation
+    else:
+    ####
+        # Load from Pyt checkpoint - either given as init_checkpoint, or picked up from output_dir if found
+        if args.init_checkpoint is not None or found_resume_checkpoint(args):
+            # Prepare model
 
-            resume_init_checkpoint = os.path.join(args.output_dir, checkpoint_str.replace("*", str(global_step)))
-            print("Setting init checkpoint to %s - which is the latest in %s" %(resume_init_checkpoint, args.output_dir))
-            checkpoint=torch.load(resume_init_checkpoint, map_location="cpu")
-        else:
-            checkpoint=torch.load(args.init_checkpoint, map_location="cpu")["model"]
+            model = BertForPreTraining(config)
+            if args.init_checkpoint is None: # finding checkpoint in output_dir
+                checkpoint_str = "phase2_ckpt_*.pt" if args.phase2 else "phase1_ckpt_*.pt"
+                model_names = [f for f in glob.glob(os.path.join(args.output_dir, checkpoint_str))]
+                global_step = max([int(x.split('.pt')[0].split('_')[-1].strip()) for x in model_names])
+                args.resume_step = global_step #used for throughput computation
 
-        # Fused MHA requires a remapping of checkpoint parameters
-        if config.fused_mha:
-            checkpoint_remapped = remap_attn_parameters(checkpoint)
-            model.load_state_dict(checkpoint_remapped, strict=False)
-        else:
-            model.load_state_dict(checkpoint, strict=True)
-    else: #Load from TF Checkpoint
-        model = BertForPreTraining.from_pretrained(args.init_tf_checkpoint, from_tf=True, config=config)
+                resume_init_checkpoint = os.path.join(args.output_dir, checkpoint_str.replace("*", str(global_step)))
+                print("Setting init checkpoint to %s - which is the latest in %s" %(resume_init_checkpoint, args.output_dir))
+                checkpoint=torch.load(resume_init_checkpoint, map_location="cpu")
+            else:
+                checkpoint=torch.load(args.init_checkpoint, map_location="cpu")["model"]
+
+            # Fused MHA requires a remapping of checkpoint parameters
+            if config.fused_mha:
+                checkpoint_remapped = remap_attn_parameters(checkpoint)
+                model.load_state_dict(checkpoint_remapped, strict=False)
+            else:
+                model.load_state_dict(checkpoint, strict=True)
+        else: #Load from TF Checkpoint
+            model = BertForPreTraining.from_pretrained(args.init_tf_checkpoint, from_tf=True, config=config)
 
 
     model.to(device)
@@ -533,14 +542,15 @@ def prepare_model_and_optimizer(args, device):
                           lr=args.learning_rate,
                           betas=(args.opt_lamb_beta_1, args.opt_lamb_beta_2))
     #optimizer = BertAdam(optimizer_grouped_parameters,lr=args.learning_rate, warmup=args.warmup_proportion, t_total=args.max_steps, schedule='warmup_poly')
-    mlperf_logger.log_event(key='opt_epsilon', value=optimizer.defaults['eps'],
-                            sync=False)
-    b1, b2 = optimizer.defaults['betas']
-    mlperf_logger.log_event(key='opt_lamb_beta_1', value=b1, sync=False)
-    mlperf_logger.log_event(key='opt_lamb_beta_2', value=b2, sync=False)
-    mlperf_logger.log_event(key='opt_lamb_weight_decay_rate',
-                            value=optimizer.defaults['weight_decay'],
-                            sync=False)
+    ### Commenting below lines since it gives error with Adam
+#    mlperf_logger.log_event(key='opt_epsilon', value=optimizer.defaults['eps'],
+#                            sync=False)
+#    b1, b2 = optimizer.defaults['betas']
+#    mlperf_logger.log_event(key='opt_lamb_beta_1', value=b1, sync=False)
+#    mlperf_logger.log_event(key='opt_lamb_beta_2', value=b2, sync=False)
+#    mlperf_logger.log_event(key='opt_lamb_weight_decay_rate',
+#                            value=optimizer.defaults['weight_decay'],
+#                            sync=False)
 
     if args.warmup_steps == 0:
         warmup_steps = int(args.max_steps * args.warmup_proportion)
@@ -574,7 +584,8 @@ def prepare_model_and_optimizer(args, device):
 
     if args.local_rank != -1:
         if not args.allreduce_post_accumulation:
-            model = DDP(model, message_size=250000000, gradient_predivide_factor=torch.distributed.get_world_size())
+            #model = DDP(model, message_size=250000000, gradient_predivide_factor=torch.distributed.get_world_size())
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank],find_unused_parameters=True)
         else:
             flat_dist_call([param.data for param in model.parameters()], torch.distributed.broadcast, (0,) )
 
@@ -630,7 +641,10 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
         optimizer.step()
         for param in model.parameters():
             param.grad = None
-        global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1
+        if args.fp16:
+            global_step += 0 if _amp_state.loss_scalers[0]._has_overflow else 1
+        else:
+            global_step += 1
 
     return global_step
 
@@ -753,7 +767,8 @@ def main():
                      os.path.isfile(os.path.join(args.input_dir, f)) and 'part' in f]
             files.sort()
             num_files = len(files)
-            random.Random(shuffling_seeds[epoch]).shuffle(files)
+            ### to disable shuffling
+            #random.Random(shuffling_seeds[epoch]).shuffle(files)
             f_start_id = 0
 
         mlperf_logger.log_end(key=mlperf_logger.constants.INIT_STOP, sync=False)
@@ -789,7 +804,8 @@ def main():
                          os.path.isfile(os.path.join(args.input_dir, f)) and 'part' in f]
                 files.sort()
                 num_files = len(files)
-                random.Random(shuffling_seeds[epoch]).shuffle(files)
+                ##To disable shuffling
+                ###random.Random(shuffling_seeds[epoch]).shuffle(files)
                 f_start_id = 0
 
             first_epoch = False
@@ -804,9 +820,11 @@ def main():
                 data_file = files[(f_start_id*torch.distributed.get_world_size() + torch.distributed.get_rank()) % num_files]
 
             previous_file = data_file
-
+            print("----data_file-----", data_file)
             train_data = pretraining_dataset(data_file, args.max_predictions_per_seq)
-            train_sampler = RandomSampler(train_data)
+            #train_sampler = RandomSampler(train_data)
+            ## To disable shuffling
+            train_sampler = SequentialSampler(train_data)
             train_dataloader = DataLoader(train_data, sampler=train_sampler,
                                           batch_size=args.train_batch_size, num_workers=4, worker_init_fn=worker_init, pin_memory=True)
 
@@ -825,8 +843,8 @@ def main():
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init_fn=worker_init)
                 #avg_seqs_per_sec = []
-                #average_loss_list=[]
-                #mlm_acc_list=[]
+                average_loss_list=[]
+                mlm_acc_list=[]
                 if args.rocprof: ##tagp
                     enable_profile = True
                 else:
@@ -841,6 +859,7 @@ def main():
                         update_step = training_steps % args.gradient_accumulation_steps == 0
 
                         batch = [t.to(device) for t in batch]
+                        #print("batch",batch)
                         input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
                         loss, mlm_acc, _ = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
                                         masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
@@ -928,8 +947,8 @@ def main():
                                           "samples_trained": samples_trained,
                                           "skipped_steps": now_skipped,
                                           "timestamp": now_time})
-                            #average_loss_list.append(average_loss)
-                            #mlm_acc_list.append(mlm_acc)
+                            average_loss_list.append(average_loss)
+                            mlm_acc_list.append(mlm_acc)
                             average_loss = 0
 
                         if global_step >= args.max_steps or end_training:
@@ -1004,10 +1023,20 @@ def main():
         mlperf_logger.log_end(key=mlperf_logger.constants.RUN_STOP,
                               metadata={'status': status}, sync=False)
 
-        ##Save for plots
-        #np.save('mi100-f16-mhalib-loss-bertadam-fln',average_loss_list)
-        #np.save('mi100-f16-mhalib-mlm-acc-bertadam-fln',mlm_acc_list)
-        #np.save('ntokens-list',settings.ntokens_list)
+        print("----len of loss-------",len(average_loss_list))
+        from matplotlib import pyplot as plt
+        plt.plot(average_loss_list,'r',label='loss')
+        plt.plot(mlm_acc_list,'g',label='mlm_acc')
+        plt.xticks(np.arange(0, len(average_loss_list), 1000))
+        #plt.yticks(np.arange(0, max(average_loss_list), 10))
+        plt.xlabel('steps')
+        #plt.ylabel('loss')
+        plt.legend()
+        plt.savefig('mi100-ph1-f32-bs-8-1er-1gpu-1000steps-fusedLAMB-fixedseed-dataset-1.png')
+
+        ##SAVE AS numpy in case plot fails
+        np.save('mi100-ph1-1er-loss',average_loss_list)
+        np.save('mi100-ph1-1er-acc',mlm_acc_list)
     return args, final_loss, train_time_raw
 
 def global_batch_size(args):

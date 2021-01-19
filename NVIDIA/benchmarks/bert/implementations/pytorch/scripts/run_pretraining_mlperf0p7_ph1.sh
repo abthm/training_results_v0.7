@@ -19,20 +19,22 @@ echo "Container nvidia build = " $NVIDIA_BUILD_ID
 #train_batch_size=${1:-8192}
 train_batch_size=${1:-8}
 learning_rate=${2:-"6e-3"}
-precision=${3:-"fp16"}
-num_gpus=${4:-8}
+precision=${3:-"fp32"}
+num_gpus=${4:-1}
 warmup_proportion=${5:-"0.0"}
-train_steps=${6:-7038}
+#train_steps=${6:-7038}
+train_steps=${6:-1000}
 #save_checkpoint_steps=${7:-200}
 resume_training=${8:-"false"}
 create_logfile=${9:-"true"}
 accumulate_gradients=${10:-"true"}
-#gradient_accumulation_steps=${11:-128}
+#gradient_accumulation_steps=${11:-256}
 gradient_accumulation_steps=${11:-1}
-seed=${12:-$RANDOM}
+#seed=${12:-$RANDOM}
+seed=${12:-1}
 job_name=${13:-"bert_lamb_pretraining"}
-allreduce_post_accumulation=${14:-"true"}
-allreduce_post_accumulation_fp16=${15:-"true"}
+allreduce_post_accumulation=${14:-"false"}
+allreduce_post_accumulation_fp16=${15:-"false"}
 train_batch_size_phase2=${17:-27}
 learning_rate_phase2=${18:-"3.5e-4"}
 warmup_proportion_phase2=${19:-"0"}
@@ -41,9 +43,10 @@ gradient_accumulation_steps_phase2=${21:-1}
 #DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
 #DATA_DIR_PHASE1=${22:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 DATA_DIR_PHASE1='/workspace/bert-mlperf-data/mlperf-tf-hdf5'
-BERT_CONFIG="/workspace/bert-mlperf-data/bert_config.json"
+BERT_CONFIG="/workspace/bert-mlperf-data/bert_config-1.json"
 CODEDIR=${24:-"./"}
-init_checkpoint=${25:-"/workspace/bert-mlperf-data/model.ckpt-28252.pt"}
+#init_checkpoint=${25:-"/workspace/bert-mlperf-data/model.ckpt-28252.pt"}
+init_checkpoint=${25:-"None"}
 RESULTS_DIR=$CODEDIR/results
 CHECKPOINTS_DIR=$RESULTS_DIR/checkpoints
 
@@ -97,11 +100,11 @@ if [ "$allreduce_post_accumulation_fp16" == "true" ] ; then
    ALL_REDUCE_POST_ACCUMULATION_FP16="--allreduce_post_accumulation_fp16"
 fi
 
-INIT_CHECKPOINT=""
-if [ "$init_checkpoint" != "None" ] ; then
-   INIT_CHECKPOINT="--init_checkpoint=$init_checkpoint"
-fi
-
+#INIT_CHECKPOINT=""
+#if [ "$init_checkpoint" != "None" ] ; then
+#   INIT_CHECKPOINT="--init_checkpoint=$init_checkpoint"
+#fi
+#
 echo $DATA_DIR_PHASE1
 INPUT_DIR=$DATA_DIR_PHASE1
 CMD=" $CODEDIR/run_pretraining.py"
@@ -124,7 +127,8 @@ CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
 CMD+=" $INIT_CHECKPOINT"
 CMD+=" --do_train"
-CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha" ##remove unpad to try apex contrib mha, fp16 removed, remove skip_checkpoint
+#CMD+=" --fused_gelu_bias --dense_seq_output --unpad --fused_mha" ##remove unpad to try apex contrib mha, fp16 removed, remove skip_checkpoint
+CMD+=" --fused_gelu_bias --dense_seq_output" ##remove unpad to try apex contrib mha, fp16 removed, remove skip_checkpoint
 CMD+=" --enable_fuse_dropout"
 
 CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"

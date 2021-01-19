@@ -292,6 +292,7 @@ class BertConfig(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 try:
+    print("---using FLN----")
     import apex
     #apex.amp.register_half_function(apex.normalization.fused_layer_norm, 'FusedLayerNorm')
     import apex.normalization
@@ -497,6 +498,7 @@ class BertLayer(nn.Module):
             print("-------------using mhalib------------")
             self.attention = FastUnpadBertAttention(config)
         else:
+            print("-----using vanilla bert self attention------")
             self.attention = BertAttention(config)
         self.intermediate = BertIntermediate(config)
         self.output = BertOutput(config)

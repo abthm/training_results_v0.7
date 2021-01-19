@@ -253,7 +253,7 @@ bool dispatch_softmax(output_t *dst, const input_t *src, int softmax_elements, i
 // WARP_ITERATOINS The number of iterations required for one warp to iterate over all data.
 // WARP_SIZE number of elements working on a single batch, has to be a power of two.
 // ELEMENTS_PER_LDG_STG has to be 1.
-template <typename input_t, typename output_t, typename acc_t, int WARP_BATCH, int WARP_ITERATIONS, int WARP_SIZE = 32, int ELEMENTS_PER_LDG_STG=1>
+template <typename input_t, typename output_t, typename acc_t, int WARP_BATCH, int WARP_ITERATIONS, int WARP_SIZE = 64, int ELEMENTS_PER_LDG_STG=1>
 __global__ void additive_masked_softmax_warp_forward(input_t *dst, const output_t *src, const input_t *pad_mask, int batch_size, int stride, int element_count, int pad_batch_stride)
 {
     assert(ELEMENTS_PER_LDG_STG==1);
@@ -397,7 +397,8 @@ template <typename input_t, typename output_t, typename acc_t>
 bool warp_additive_masked_softmax_kernel(int log2_elements, int &warp_size, int &batches_per_warp, additive_masked_softmax_forward_func<input_t, output_t> &kernel) {
     // determine size of a warp
     const int next_power_of_two = 1 << log2_elements;
-    warp_size = (next_power_of_two < 32) ? next_power_of_two : 32;
+    //warp_size = (next_power_of_two < 32) ? next_power_of_two : 32;
+    warp_size = (next_power_of_two < 64) ? next_power_of_two : 64;
  
     // determine how many batches a warp should process.
     batches_per_warp = (next_power_of_two <= 128) ? 2 : 1;
@@ -422,19 +423,24 @@ bool warp_additive_masked_softmax_kernel(int log2_elements, int &warp_size, int 
         kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,1,32,1>;
         break;
     case 6: // 64
-        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,2,32,1>;
+        //kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,2,32,1>;
+        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,1,64,1>;
         break;
     case 7: // 128
-        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,4,32,1>;
+        //kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,4,32,1>;
+        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 2,2,64,1>;
         break;
     case 8: // 256
-        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,8,32,1>;
+        //kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,8,32,1>;
+        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,4,64,1>;
         break;
     case 9: // 512
-        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,16,32,1>;
+        //kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,16,32,1>;
+        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,8,64,1>;
         break;
     case 10: // 1024
-        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,32,32,1>;
+        //kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,32,32,1>;
+        kernel = &additive_masked_softmax_warp_forward<input_t, output_t, acc_t, 1,16,64,1>;
         break;
     default:
         return false;
