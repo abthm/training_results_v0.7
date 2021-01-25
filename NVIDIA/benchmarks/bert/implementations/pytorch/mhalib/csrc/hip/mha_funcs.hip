@@ -29,6 +29,8 @@
 
 // global variables.
 hipStream_t stream[nstreams];
+hipStream_t stream_debug[nstreams];
+
 rocblas_handle handle[nstreams];
 //rocblas_handle handle;
 
@@ -57,7 +59,7 @@ void FastBmm1Fprop_(torch::Tensor &A,
 			 bool enable_stream,
 			 bool sync)
 {
-    //printf("----using mhalib----"); 
+//    printf("----using mhalib----"); 
     float one = 1.0, zero = 0.0, alpha = 1.0 / sqrt(static_cast<float>(embed));
 
     int *seqlen = static_cast<int*>(seq_len.data_ptr());
@@ -68,6 +70,7 @@ void FastBmm1Fprop_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
+        rocblas_status rstatus = rocblas_get_stream(handle[i], &stream_debug[i]);
         //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_transpose,
@@ -121,6 +124,11 @@ void FastBmm1Fprop_(torch::Tensor &A,
                                    algo,
 				   solution_index,
 				   flags);
+	printf("handle bmm1: ");
+	printf("%x, ",(void *)handle[i]);
+	printf("stream bmm1: ");
+	printf("%x, ",(void *)stream_debug[i]);
+	printf("\n");
 	ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 	ptrB = static_cast<void*>(static_cast<half*>(ptrB) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
 	ptrC = static_cast<void*>(static_cast<half*>(ptrC) + heads*seqlen[i]*seqlen[i]);
@@ -157,6 +165,7 @@ void FastBmm2Fprop_(torch::Tensor &A,
     void *ptrD = static_cast<void*>(static_cast<half*>(D.data_ptr()));                          // output
 
     for(int i = 0; i < (enable_stream ? batch : 1); i++) {
+        rocblas_status rstatus = rocblas_get_stream(handle[i], &stream_debug[i]);
         //rocblas_set_stream(handle, enable_stream ? stream[i%nstreams]: at::hip::getCurrentHIPStreamMasqueradingAsCUDA());
 //        cublasGemmStridedBatchedEx(handle,
 //                                   rocblas_operation_none,
@@ -210,6 +219,11 @@ void FastBmm2Fprop_(torch::Tensor &A,
                                    algo,
 				   solution_index,
 				   flags);
+	printf("handle bmm2: ");
+	printf("%x, ",(void *)handle[i]);
+	printf("stream bmm2: ");
+	printf("%x, ",(void *)stream_debug[i]);
+	printf("\n");
         ptrA = static_cast<void*>(static_cast<half*>(ptrA) + (strided ? seqlen[i]*heads*3*embed : seqlen[i]*heads*embed));
         ptrB = static_cast<void*>(static_cast<half*>(ptrB) + heads*seqlen[i]*seqlen[i]);
         ptrC = static_cast<void*>(static_cast<half*>(ptrC) + seqlen[i]*heads*embed);
@@ -763,6 +777,10 @@ void FastMaskSoftmaxDropoutBprop_(torch::Tensor &input,
 
 void init_mha_cuda_extension()
 {
+
+    hipSetDevice(0); // set your device appropriately
+    rocblas_initialize(); // to initialize Tensile
+
     // CUDA Stream.
     for(int i = 0; i < nstreams; i++) {
         hipStreamCreate(&stream[i]);

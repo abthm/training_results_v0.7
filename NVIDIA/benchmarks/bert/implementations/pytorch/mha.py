@@ -90,17 +90,19 @@ class FastUnpadBertSelfAttention(nn.Module):
             value_layer = self.value(hidden_states)            
 
         # BMM1.
+        print("-----bmm1-------")
         if self.enable_stream: torch.cuda.synchronize()
         if self.fuse_qkv:
             attention_scores, qkv_layer = self.bmm1(mixed_x_layer, self.batch, seqlen)
         else:
             attention_scores = self.bmm1(query_layer, key_layer, self.batch, seqlen)            
-
+        print("-----end bmm1-------")
         if self.enable_stream: torch.cuda.synchronize()
         if self.fuse_scale == False:
             attention_scores = attention_scores / math.sqrt(self.attention_head_size)
 
         # Softmax.
+        print("-------Softmax------")
         if self.enable_stream: torch.cuda.synchronize()        
         if self.fuse_mask ==True and self.fuse_dropout == True:
             attention_probs = self.softmax(attention_scores, attention_mask, self.batch, seqlen, self.num_attention_heads, is_training)
@@ -115,13 +117,14 @@ class FastUnpadBertSelfAttention(nn.Module):
                     attention_probs = F.softmax(attention_scores.view(batch,self.num_attention_heads,seqlen[0],seqlen[0]), dim=-1).flatten().contiguous()
                 else:
                     attention_probs = self.pytorch_softmax(attention_scores, self.batch, seqlen, self.num_attention_heads)
-
+        print("------end Softmax-----")
         # Dropout.
         if self.enable_stream: torch.cuda.synchronize()                
         if self.fuse_dropout == False:
             attention_probs = self.dropout(attention_probs)
 
         # BMM2.
+        print("--------start bmm2-----")
         if self.enable_stream: torch.cuda.synchronize()
         if self.fuse_qkv:
             context_layer = self.bmm2(attention_probs, qkv_layer, self.batch, seqlen)
