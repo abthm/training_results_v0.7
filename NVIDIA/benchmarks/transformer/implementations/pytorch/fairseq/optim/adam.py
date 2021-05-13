@@ -22,6 +22,7 @@ class FairseqAdam(FairseqOptimizer):
         if self.args.distributed_weight_update == 2:
             dwu_args = self.distributed_weight_update_config
             print("DistributedFusedAdam",dwu_args)
+            print("DistributedFusedAdam self.optimizer_config",self.optimizer_config)
             self._optimizer = DistributedFusedAdam(params, **dwu_args, **self.optimizer_config)
         elif self.args.distributed_weight_update == 3:
             dwu_args = self.distributed_weight_update_config

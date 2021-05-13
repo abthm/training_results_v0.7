@@ -157,6 +157,8 @@ class Trainer(object):
 
         # rework all_gather_list
         assert(sample_size == logging_output.get('sample_size', 0.0))
+        #print("---sample_size----",sample_size)
+        #print("---ntokens----",logging_output.get('ntokens', 0.0))
         assert(sample_size == logging_output.get('ntokens', 0.0))
         self._all_reduce_list[0] += sample_size
         self._all_reduce_list[1] += logging_output.get('nsentences', 0.0)

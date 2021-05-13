@@ -143,9 +143,10 @@ def main(args):
     log_event(key=constants.SEED, value=args.seed)
 
     # L2 Sector Promotion
-    pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
-    result = ctypes.CDLL('libcudart.so').cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
-    result = ctypes.CDLL('libcudart.so').cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    ###Disabled for MI100
+    #pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
+    #result = ctypes.CDLL('libcudart.so').cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    #result = ctypes.CDLL('libcudart.so').cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
 
     worker_seeds, shuffling_seeds = setup_seeds(args.seed, args.max_epoch + 1,
                                                 torch.device('cuda'),
@@ -192,6 +193,7 @@ def main(args):
     # Send a dummy batch to warm the caching allocator
     dummy_batch = language_pair_dataset.get_dummy_batch_isolated(args.max_tokens, max_positions, 8)
     trainer.dummy_train_step(dummy_batch)
+    #print("---dummy_batch type----",dummy_batch.type())
 
     # Train until the learning rate gets too small or model reaches target score
     max_epoch = args.max_epoch if args.max_epoch >= 0 else math.inf
@@ -266,7 +268,7 @@ def main(args):
         # train for one epoch
         start = time.time()
         #exit(1)
-        train(args, trainer, task, epoch_itr, shuffling_seeds)
+        #train(args, trainer, task, epoch_itr, shuffling_seeds)
         print("epoch time ", time.time() - start)
 
         start = time.time()
