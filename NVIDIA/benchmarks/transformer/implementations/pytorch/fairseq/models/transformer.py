@@ -30,7 +30,7 @@ from . import (
 
 from apex.normalization.fused_layer_norm import FusedLayerNorm
 
-@torch.jit.script
+#@torch.jit.script
 def jit_dropout_add(x, residual, prob, is_training) :
     # type: (Tensor, Tensor, float, bool) -> Tensor
     # TODO: Bug in Pytorch 19.07 prevents propogation of "training" argument
@@ -46,7 +46,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor') :
 if hasattr(torch._C, '_jit_set_profiling_mode') :
     torch._C._jit_set_profiling_mode(False)
 
-@torch.jit.script
+#@torch.jit.script
 def jit_relu_dropout(x, prob, is_training) :
     # type: (Tensor, float, bool) -> Tensor
     out = F.threshold(x, 0., 0.)
