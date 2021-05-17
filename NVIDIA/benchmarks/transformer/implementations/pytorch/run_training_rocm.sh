@@ -2,8 +2,8 @@
 
 ## DL params
 ## Borrowed from config_DGX2.sh 
-export MAX_TOKENS=5120 ##8192
-export LEARNING_RATE="1.976e-3"
+export MAX_TOKENS=8192 ##6912 ##5120
+export LEARNING_RATE="1.976e-3" ##1.732e-3 ##1.9e-3"
 export WARMUP_UPDATES=1000
 export EXTRA_PARAMS="--distributed-weight-update 0 --dwu-num-blocks 4 --dwu-num-rs-pg 2 --dwu-num-ar-pg 2 --dwu-num-ag-pg 0 --dwu-overlap-reductions --dwu-num-chunks 1 --dwu-flat-mt --dwu-compute-L2-grad-norm --max-source-positions 80 --max-target-positions 80 --adam-betas (0.9,0.98) "
 

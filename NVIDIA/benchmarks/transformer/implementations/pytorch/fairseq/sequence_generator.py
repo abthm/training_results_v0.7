@@ -353,14 +353,8 @@ class SequenceGenerator(object):
                         k=min(cand_size, probs.view(bsz, -1).size(1) - 1),  # -1 so we never select pad
                         out=(cand_scores, cand_indices),
                     )
-                    print("---cand_beams type---",cand_beams.type())
-                    print("---cand_indices type---",cand_indices.type())
-                    #print("----self.vocab_size type----",self.vocab_size.type())
-                    vocab_size_long = torch.LongTensor([self.vocab_size]).cuda()
-                    print("-----vocab_size_long.type-----",vocab_size_long.type())
-                    a = torch.div(cand_indices, vocab_size_long)
-                    print("----torch.div(cand_indices, self.vocab_size).type()-----",a.type())
-                    torch.div(cand_indices, vocab_size_long, out=cand_beams)
+                    #torch.div(cand_indices, self.vocab_size, out=cand_beams)
+                    cand_beams= torch.div(cand_indices, self.vocab_size).long()
                     cand_indices.fmod_(self.vocab_size)
             else:
                 # finalize all active hypotheses once we hit maxlen
