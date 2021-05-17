@@ -268,7 +268,7 @@ def main(args):
         # train for one epoch
         start = time.time()
         #exit(1)
-        #train(args, trainer, task, epoch_itr, shuffling_seeds)
+        train(args, trainer, task, epoch_itr, shuffling_seeds)
         print("epoch time ", time.time() - start)
 
         start = time.time()
