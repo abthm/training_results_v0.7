@@ -20,7 +20,7 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         self.cpu_loss = torch.empty(1, dtype=torch.float32, device=torch.device('cpu'))
         self.cpu_loss = self.cpu_loss.pin_memory()
         if args.fast_xentropy :
-            from apex.contrib.xentropy import SoftmaxCrossEntropyLoss
+            from apexcontrib.apex.contrib.xentropy import SoftmaxCrossEntropyLoss
             self.xentropy_func = SoftmaxCrossEntropyLoss.apply
         else:
             self.xentropy_func = None

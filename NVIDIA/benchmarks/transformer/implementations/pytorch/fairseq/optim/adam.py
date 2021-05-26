@@ -10,10 +10,10 @@ import torch
 import torch.optim
 
 from . import FairseqOptimizer, register_optimizer
-from apex.contrib.optimizers.fused_adam import FusedAdam
-from apex.contrib.optimizers.distributed_fused_adam import DistributedFusedAdam
-from apex.contrib.optimizers.distributed_fused_adam_v2 import DistributedFusedAdamV2
-from apex.contrib.optimizers.distributed_fused_adam_v3 import DistributedFusedAdamV3
+from apexcontrib.apex.contrib.optimizers.fused_adam import FusedAdam
+from apexcontrib.apex.contrib.optimizers.distributed_fused_adam import DistributedFusedAdam
+from apexcontrib.apex.contrib.optimizers.distributed_fused_adam_v2 import DistributedFusedAdamV2
+from apexcontrib.apex.contrib.optimizers.distributed_fused_adam_v3 import DistributedFusedAdamV3
 
 @register_optimizer('adam')
 class FairseqAdam(FairseqOptimizer):

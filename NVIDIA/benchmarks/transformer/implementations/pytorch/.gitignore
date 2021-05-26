@@ -5,4 +5,10 @@ fairseq.egg-info/
 fairseq/.sequence_generator.py.swp
 *.so
 *.log
-
+apexcontrib/apexcontrib.egg-info/
+*.hip
+*_hip.*
+*.swp
+*hip*
+apexcontrib/build
+apexcontrib/dist

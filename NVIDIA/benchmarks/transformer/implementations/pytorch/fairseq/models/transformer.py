@@ -16,8 +16,10 @@ torch.set_printoptions(threshold=500000000, linewidth=1024)
 from fairseq import options
 from fairseq import utils
 
-from apex.contrib.multihead_attn import SelfMultiheadAttn
-from apex.contrib.multihead_attn import EncdecMultiheadAttn
+#from apex.contrib.multihead_attn import SelfMultiheadAttn
+from apexcontrib.apex.contrib.multihead_attn import SelfMultiheadAttn
+#from apex.contrib.multihead_attn import EncdecMultiheadAttn
+from apexcontrib.apex.contrib.multihead_attn import EncdecMultiheadAttn
 
 from fairseq.modules import (
     AdaptiveSoftmax, LearnedPositionalEmbedding, SinusoidalPositionalEmbedding, 
